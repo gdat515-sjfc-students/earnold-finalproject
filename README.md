@@ -1,2 +1,5 @@
 # earnold-finalproject
-final project
+Final project
+
+Statement of Work: 
+Problem Statement:
