@@ -1,0 +1,211 @@
+---
+title: "Final Project GDAT 515"
+author: "Emily Arnold"
+date: "3/2/2020"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    theme: journal
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+req.packages <- c("tidyverse", "ggplot2", "plotly", "scales")
+
+'%notin%' <- Negate('%in%')
+if(any(installed.packages() %notin% req.packages)){
+  missing.packages <- which(req.packages %notin% installed.packages())
+  install.packages(req.packages[missing.packages])
+}
+eval(
+  parse(
+    text = paste0('library(',req.packages, ')')
+  )
+)
+
+#polling data was here https://projects.fivethirtyeight.com/polls/president-primary-d/national/
+
+#donation data was here https://www.fec.gov/campaign-finance-data/contributions-individuals-file-description/
+```
+
+
+```{r load data, include=FALSE}
+
+polls <- read.csv("C:/Users/Emily/Documents/Data Science/Data Visualization/final project/earnold-finalproject/president_primary_polls.csv")
+
+polls_select <- polls[,c("candidate_name", "pct", "end_date", "state", "office_type", "party")]
+
+polls_select$candidate_name <- toupper(polls_select$candidate_name)
+polls_select$last_name <- str_extract(polls_select$candidate_name, "\\s.*")
+polls_select$last_name <- gsub(" ", "", polls_select$last_name)
+polls_select$first_name <- str_extract(polls_select$candidate_name, ".+?(?=\\s)")
+polls_select$merge_name <- paste0(polls_select$last_name, ", ", polls_select$first_name)
+ 
+polls_select$candidate_name <- NULL
+polls_select$first_name <- NULL
+polls_select$last_name <- NULL
+
+#need to convert date to actual date
+polls_select$end_date <- as.character(polls_select$end_date)
+polls_select$end_date <- as.Date(polls_select$end_date, "%m/%d/%y")
+
+polls_select$merge_name[polls_select$merge_name == "R.BIDENJR., JOSEPH"] <- "BIDEN, JOSEPH"
+polls_select$merge_name[polls_select$merge_name == "D.HARRIS, KAMALA"] <- "HARRIS, KAMALA"
+polls_select$merge_name[polls_select$merge_name == "A.BOOKER, CORY"] <- "BOOKER, CORY"
+polls_select$merge_name[polls_select$merge_name == "CASTRO, JULIÃ¡N"] <- "CASTRO, JULIAN"
+polls_select$merge_name[polls_select$merge_name == "E.GILLIBRAND, KIRSTEN"] <- "GILLIBRAND, KIRSTEN"
+polls_select$merge_name[polls_select$merge_name == "F.BENNET, MICHAEL"] <- "BENNET, MICHAEL"
+polls_select$merge_name[polls_select$merge_name == "F.WELD, WILLIAM	"] <- "WELD, WILLIAM"
+polls_select$merge_name[polls_select$merge_name == "K.DELANEY, JOHN"] <- "DELANEY, JOHN"
+
+polls_select[polls_select$merge_name == "TRUMP, DONALD", "party"] <- "REP"
+polls_select[polls_select$merge_name == "DELAFUENTE, ROQUE", "party"] <- "REP"
+
+#only want data for presidential candidates and polls conducted recently
+polls_agg <- polls_select %>% 
+  filter(.,end_date > "2019-10-01") %>% 
+  filter(., office_type == "U.S. President") %>% 
+  group_by(merge_name, party) %>% 
+  summarize(status = mean(pct))
+
+#reading in campaign contributions data
+money <- read.delim("weball20.txt", header = FALSE, sep = "|")
+
+money <- money[,c(2,6,12,18)]
+colnames(money) <- c("candidate_name", "total_receipts", "cand_contrib", "individual_contrib" )
+
+money$candidate_name <- gsub("\\.", "", money$candidate_name)
+money <- aggregate(.~candidate_name, data = money, FUN = sum)
+money$candidate_name <- as.character(money$candidate_name)
+
+#cleaning up data
+money$last_name <- str_extract(money$candidate_name, ".+?(?=,)")
+money$first_name <- str_extract(money$candidate_name, ",.*")
+money$first_name <- gsub(", ", "", money$first_name)
+money$first_name <- gsub("\\s.*", "", money$first_name)
+money$first_name <- gsub(" ", "", money$first_name)
+
+money$merge_name <- paste0(money$last_name, ", ", money$first_name)
+
+#money$merge_name <- money$candidate_name
+money$candidate_name <- NULL
+money$last_name <- NULL
+money$first_name <-NULL
+
+candidate_data <- na.omit(merge(polls_agg, money, by = "merge_name", all.x = TRUE))
+
+```
+
+
+Overall Candidate Landscape
+==================================================
+
+Column 
+-----------------------------------------------------------------------
+
+
+```{r first visual, echo = FALSE}
+
+plot1_data <- candidate_data %>% 
+  top_n(20, status) %>% 
+  mutate(merge_name = factor(merge_name, levels = unique(candidate_data$merge_name)[order(candidate_data$status,decreasing =TRUE)]))
+
+plot_ly(data = plot1_data, x = ~merge_name, y = ~status, 
+        text = ~paste0("Name: ", merge_name, "- ", party)) %>% 
+        add_trace(p = ., type = "scatter") %>% 
+        layout(xaxis = list(title = "Candidate", showgrid = FALSE),
+         yaxis = list(title = "Polling Average", showgrid = FALSE),
+         title = "Polling Average by Candidate")
+
+```
+
+column
+-----------------------------------------------------------------------
+
+```{r money only chart, echo = FALSE}
+
+candidate_data %>%
+  top_n(20, total_receipts) %>%
+  arrange(.,desc(total_receipts)) %>%
+  mutate(total_receipts = total_receipts / 10^6) %>%
+  mutate(cand_contrib  = cand_contrib / 10^6) %>%
+ggplot(data = ., aes(x = reorder(merge_name, (total_receipts)), y = total_receipts))+
+  geom_col(aes(fill = cand_contrib ))+
+  theme(axis.text.x = element_text(angle = 90))+
+  labs(title = "Donations", x = "Candidate", y = "Donations")+
+  scale_fill_gradient(low = "#5da5b6", high = "#FF6347", name = "Personal Contribution (M)")+
+  scale_y_continuous(labels = unit_format(unit = "M"))+
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  coord_flip()
+
+
+```
+
+Deep Dive
+==================================================
+
+Column 
+-----------------------------------------------------------------------
+
+Select a candidate to reveal information about finances and polling results.
+
+```{r selection bar, echo=FALSE}
+
+candidates <- candidate_data$merge_name
+
+selectInput("merge_name", label = "Choose a Candidate:",
+            choices = candidates, selected = candidates[1])
+
+```
+
+
+```{r echo = FALSE}
+
+candidate_data2 <- candidate_data %>%
+  mutate(total_receipts = total_receipts / 10^6)
+
+renderPlot({
+  ggplot(data = candidate_data2, aes(x = total_receipts, y = status))+
+  geom_point()+
+  geom_point(data = candidate_data2[candidate_data2$merge_name == input$merge_name,],
+             aes(x = total_receipts, y = status),
+             colour = "red",
+             size = 5)+
+  scale_x_continuous(labels = unit_format(unit = "M"))+
+  labs(title = "Status vs. Donations",
+       x = "Donations",
+       y = "Approval rating average")+
+    theme_minimal()
+})
+
+```
+
+
+```{r plot for candidate polling over time, echo = FALSE}
+
+names <- candidate_data$merge_name
+
+limited_over_time <- polls_select %>% 
+                    filter(merge_name %in% names)
+
+renderPlot({
+  
+  limited_over_time %>%
+  filter(merge_name == input$merge_name) %>% 
+  filter(.,end_date > "2019-10-01") %>% 
+  ggplot(data = ., aes(x = end_date, y = pct))+
+  geom_point()+
+  geom_smooth(colour = "#00688B", se = FALSE)+
+  labs(title = "Approval Over Time", 
+       x = "Date", 
+       y = "Approval rating average")+
+    theme_minimal()
+})
+
+
+```
+
