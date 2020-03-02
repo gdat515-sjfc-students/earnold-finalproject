@@ -7,13 +7,14 @@ output:
     orientation: columns
     theme: journal
 runtime: shiny
+vertical_layout: scroll
 ---
 
 ```{r setup, include=FALSE}
 
 knitr::opts_chunk$set(echo = TRUE)
 
-req.packages <- c("tidyverse", "ggplot2", "plotly", "scales")
+req.packages <- c("tidyverse", "ggplot2", "plotly", "scales", "lubridate")
 
 '%notin%' <- Negate('%in%')
 if(any(installed.packages() %notin% req.packages)){
@@ -100,10 +101,11 @@ candidate_data <- na.omit(merge(polls_agg, money, by = "merge_name", all.x = TRU
 ```
 
 
-Overall Candidate Landscape
+Exploring Approval Ratings 
 ==================================================
 
-Column 
+
+column 
 -----------------------------------------------------------------------
 
 
@@ -113,17 +115,49 @@ plot1_data <- candidate_data %>%
   top_n(20, status) %>% 
   mutate(merge_name = factor(merge_name, levels = unique(candidate_data$merge_name)[order(candidate_data$status,decreasing =TRUE)]))
 
-plot_ly(data = plot1_data, x = ~merge_name, y = ~status, 
+plot_ly(data = plot1_data, x = ~status, y = ~merge_name, 
         text = ~paste0("Name: ", merge_name, "- ", party)) %>% 
-        add_trace(p = ., type = "scatter") %>% 
-        layout(xaxis = list(title = "Candidate", showgrid = FALSE),
-         yaxis = list(title = "Polling Average", showgrid = FALSE),
-         title = "Polling Average by Candidate")
+        add_trace(p = ., type = "bar") %>% 
+        layout(xaxis = list(title = "Polling Average", showgrid = FALSE),
+         yaxis = list(title = "Candidate", showgrid = FALSE),
+         title = "Overall Approval Rating Average by Candidate")
 
 ```
 
-column
+
+column 
 -----------------------------------------------------------------------
+
+```{r third chart, echo=FALSE}
+
+names <- candidate_data$merge_name
+
+limited_over_time <- polls_select %>% 
+                    filter(merge_name %in% names) %>% 
+                    select(c(pct, end_date, merge_name)) 
+
+
+limited2 <- limited_over_time
+limited2$end_date = format(as.Date(limited2$end_date),"%Y-%m")
+limited2 <- as.data.frame(aggregate(.~end_date+merge_name, data = limited2, FUN = mean))
+
+test <-limited2 %>% 
+  top_n(2000, pct) %>% 
+ggplot(., aes(x = end_date, y = pct, color = merge_name))+
+  geom_point(aes(color = merge_name))+
+  labs(title = "Approval Ratings Over Time",
+       x = "Date",
+       y = "Approval rating average")+
+    theme_minimal()+
+    theme(legend.position = "none", axis.text.x = element_text(angle = 45)) 
+
+ggplotly(test)
+
+```
+
+
+Exploring Campaign Finances
+==================================================
 
 ```{r money only chart, echo = FALSE}
 
@@ -135,21 +169,21 @@ candidate_data %>%
 ggplot(data = ., aes(x = reorder(merge_name, (total_receipts)), y = total_receipts))+
   geom_col(aes(fill = cand_contrib ))+
   theme(axis.text.x = element_text(angle = 90))+
-  labs(title = "Donations", x = "Candidate", y = "Donations")+
+  labs(title = "Donations", x = "Candidate", y = "Campaign Money")+
   scale_fill_gradient(low = "#5da5b6", high = "#FF6347", name = "Personal Contribution (M)")+
   scale_y_continuous(labels = unit_format(unit = "M"))+
   theme_minimal()+
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
   coord_flip()
 
-
 ```
+
+
+
 
 Deep Dive
 ==================================================
 
-Column 
------------------------------------------------------------------------
 
 Select a candidate to reveal information about finances and polling results.
 
@@ -162,6 +196,8 @@ selectInput("merge_name", label = "Choose a Candidate:",
 
 ```
 
+column
+-----------------------------------------------------------------------
 
 ```{r echo = FALSE}
 
@@ -177,7 +213,7 @@ renderPlot({
              size = 5)+
   scale_x_continuous(labels = unit_format(unit = "M"))+
   labs(title = "Status vs. Donations",
-       x = "Donations",
+       x = "Campaign Money",
        y = "Approval rating average")+
     theme_minimal()
 })
@@ -185,12 +221,8 @@ renderPlot({
 ```
 
 
+
 ```{r plot for candidate polling over time, echo = FALSE}
-
-names <- candidate_data$merge_name
-
-limited_over_time <- polls_select %>% 
-                    filter(merge_name %in% names)
 
 renderPlot({
   
