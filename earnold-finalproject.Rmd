@@ -105,6 +105,8 @@ Exploring Approval Ratings
 ==================================================
 
 
+This tab explores approval data collected from FiveThirtyEight, and the following charts represent average approval ratings since October 2019. 
+
 column 
 -----------------------------------------------------------------------
 
@@ -159,6 +161,11 @@ ggplotly(test)
 Exploring Campaign Finances
 ==================================================
 
+This data is from the FEC, and represents total campaign funding, as well as individual contributions.
+
+column
+-----------------------------------------------------------------------
+
 ```{r money only chart, echo = FALSE}
 
 candidate_data %>%
@@ -184,7 +191,6 @@ ggplot(data = ., aes(x = reorder(merge_name, (total_receipts)), y = total_receip
 Deep Dive
 ==================================================
 
-
 Select a candidate to reveal information about finances and polling results.
 
 ```{r selection bar, echo=FALSE}
@@ -195,6 +201,8 @@ selectInput("merge_name", label = "Choose a Candidate:",
             choices = candidates, selected = candidates[1])
 
 ```
+
+The following chart shows campaign funding vs. approval ratings. There is generally a positive correlation between the two.
 
 column
 -----------------------------------------------------------------------
@@ -212,7 +220,7 @@ renderPlot({
              colour = "red",
              size = 5)+
   scale_x_continuous(labels = unit_format(unit = "M"))+
-  labs(title = "Status vs. Donations",
+  labs(title = "Status vs. Donations - All Candidates",
        x = "Campaign Money",
        y = "Approval rating average")+
     theme_minimal()
@@ -220,7 +228,7 @@ renderPlot({
 
 ```
 
-
+This chart displays the selected candidates approval over time.
 
 ```{r plot for candidate polling over time, echo = FALSE}
 
